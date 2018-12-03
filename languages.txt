@@ -1,0 +1,7 @@
+english;spanish;translations/en-es.txt/OpenOffice.en-es.en;translations/en-es.txt/OpenOffice.en-es.es
+english;french;translations/en-fr.txt/OpenOffice.en-fr.en;translations/en-fr.txt/OpenOffice.en-fr.fr
+english;german;translations/de-en.txt/OpenOffice.de-en.en;translations/de-en.txt/OpenOffice.de-en.de
+spanish;english;translations/en-es.txt/OpenOffice.en-es.es;translations/en-es.txt/OpenOffice.en-es.en
+spanish;french;translations/es-fr.txt/OpenOffice.es-fr.es;translations/es-fr.txt/OpenOffice.es-fr.fr
+spanish;german;translations/de-es.txt/OpenOffice.de-es.es;translations/de-es.txt/OpenOffice.de-es.de
+spanish;swedish;translations/es-sv.txt/OpenOffice.es-sv.es;translations/es-sv.txt/OpenOffice.es-sv.sv
