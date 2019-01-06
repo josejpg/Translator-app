@@ -6,7 +6,6 @@
 package translator;
 
 import java.io.*;
-import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
 import java.nio.file.Paths;
 import java.util.*;
@@ -49,13 +48,27 @@ public class FXMLDocumentController implements Initializable {
     @FXML
     private TextArea textTranslated;
     List<Language> listLang = null;
-    HashMap<String, HashMap<String, String>> allTranslates = new HashMap<>();
     ThreadPoolExecutor executor;
-    Future<HashMap<String, HashMap<String, String>>> future;
+    List<Future<String>> future;
+    List<Callable<String>> callable;
 
     
     @Override
     public void initialize(URL url, ResourceBundle rb) {
+        
+        /**
+         * Init in disable mode
+         */
+        autoDetectSrc.disableProperty().set( true );
+        autoDetectSrc.setOnAction( ( ActionEvent e ) -> {
+            if (!autoDetectSrc.isSelected()) {
+                listSrc.disableProperty().set( false );
+            } else {
+                listSrc.disableProperty().set( true );
+                setTrgListsLang();
+                setSrcListsLang();
+            }
+        });
         
         /**
          * Listener to close program
@@ -77,8 +90,8 @@ public class FXMLDocumentController implements Initializable {
                 Window stage = null;
                 File file = fileChooser.showOpenDialog(stage);
                 if( file != null){
+                    autoDetectSrc.disableProperty().set( false );
                     listLang = FileUtils.readLanguages(Paths.get(file.getPath()));
-                    setThreadPool();
                     setSrcListsLang();
                     setTrgListsLang();
                     setTotalPairLanguages();
@@ -93,7 +106,6 @@ public class FXMLDocumentController implements Initializable {
                     .getLogger( FileUtils.class.getName() )
                     .log( Level.SEVERE, null, ex );
                 MessageUtils.showError( FileUtils.class.getName(), "NullPointerException:\n\n" + ex.getMessage() );
-                stopThread();
                 
             } catch ( Exception ex ) {
 
@@ -101,7 +113,6 @@ public class FXMLDocumentController implements Initializable {
                     .getLogger( FileUtils.class.getName() )
                     .log( Level.SEVERE, null, ex );
                 MessageUtils.showError( FileUtils.class.getName(), "Exception:\n\n" + ex.getMessage() );
-                stopThread();
 
             }
         });
@@ -110,47 +121,26 @@ public class FXMLDocumentController implements Initializable {
          * Listener to write the translate words from source
          */
         textSrc.textProperty().addListener((ObservableValue<? extends String> observable, String oldValue, String newValue) -> {
-           // try {                
-                /*if(future.isDone() &&
-                    !future.isCancelled() &&
-                    future.get() != null){
-                    allTranslates = future.get();
-                }*/
-               if (!textSrc.textProperty().get().isEmpty()){
-                   /*String[] allSrcSentences = newValue.trim().split( "\n" );
-                    for( String singleSentence: allSrcSentences ){
-                        if( !singleSentence.isEmpty() &&
-                             allTranslates != null &&
-                             allTranslates.size() > 0 &&
-                             allTranslates.get(listTrg.getSelectionModel().getSelectedItem()).containsKey(singleSentence)
-                         ){
-                            tmpHashMap = allTranslates.get(listTrg.getSelectionModel().getSelectedItem());
-                            textTranslated.setText(tmpHashMap.get(singleSentence));
+            if ( !textSrc.textProperty().get().isEmpty() ){
+                if ( !autoDetectSrc.isSelected() ) {
+                    listLang.forEach( (dataLang) -> {
+                        if( dataLang.getSrcLang().equals( listSrc.getSelectionModel().getSelectedItem() ) &&
+                            dataLang.getTrgLang().equals( listTrg.getSelectionModel().getSelectedItem() )
+                        ){
+                           setThreadPool( dataLang );
                         }
-                    }*/
-                    for (Language dataLang: listLang){
-                        if (dataLang.getHashSentences().containsKey(textSrc.getText()) ){
-
-                            if (dataLang.getTrgLang().equals(listTrg.getSelectionModel().getSelectedItem()))
-                            {
-                                textTranslated.setText(dataLang.getHashSentences().get(textSrc.getText()));
-                            }
+                    });
+                } else {
+                    listLang.forEach( (dataLang) -> {
+                        if( dataLang.getTrgLang().equals( listTrg.getSelectionModel().getSelectedItem() )
+                        ){
+                           setThreadPool( dataLang );
                         }
-                    }
-               }
-               else
-               {
-                   textTranslated.setText("");
-               }
-           /* } catch (InterruptedException ex) {
-                Logger.getLogger(FXMLDocumentController.class.getName()).log(Level.SEVERE, null, ex);
-                MessageUtils.showError( FileUtils.class.getName(), "textSrc.textProperty().addListener InterruptedException:\n\n" + ex.getMessage() );
-                stopThread();
-            } catch (ExecutionException ex) {
-                Logger.getLogger(FXMLDocumentController.class.getName()).log(Level.SEVERE, null, ex);
-                MessageUtils.showError( FileUtils.class.getName(), "textSrc.textProperty().addListener ExecutionException:\n\n" + ex.getMessage() );
-                stopThread();
-            }*/
+                    });
+                }
+            } else {
+                textTranslated.setText( "" );
+            }
         
         });
         
@@ -163,10 +153,31 @@ public class FXMLDocumentController implements Initializable {
             setTrgListsLang();
         });
         
-        /*listTrg.getSelectionModel().selectedItemProperty().addListener((ObservableValue<? extends String> observable, String oldValue, String newValue) -> {
-            System.out.println("ListView selection changed from oldValue = "
-                    + oldValue + " to newValue = " + newValue);
-        });*/
+        /**
+         * Listener to change text property with the new target language
+         * and set news targets
+         */
+        listTrg.getSelectionModel().selectedItemProperty().addListener((ObservableValue<? extends String> observable, String oldValue, String newValue) -> {
+            if( newValue != null ){
+                if ( !autoDetectSrc.isSelected() ) {
+                    listLang.forEach( (dataLang) -> {
+                        if( dataLang.getSrcLang().equals( listSrc.getSelectionModel().getSelectedItem() ) &&
+                            dataLang.getTrgLang().equals( newValue )
+                        ){
+                           setThreadPool( dataLang );
+                        }
+                    });
+                } else {
+                    listLang.forEach( (dataLang) -> {
+                        if( dataLang.getTrgLang().equals( newValue ) ){
+                           setThreadPool( dataLang );
+                        }
+                    });
+                }
+            } else {
+                textTranslated.setText( "" );
+            }
+        });
     }
     
     /**
@@ -174,28 +185,21 @@ public class FXMLDocumentController implements Initializable {
      */
     private void closeApp(){
         Platform.exit();
-        stopThread();
     }
-    /**
-     * Stop thread pool
-     */
-    private void stopThread(){
-        future.cancel(true);
-        executor.shutdownNow();
-    }
+    
     /**
      * Set the targets language for the source selected
      */
     private void setTrgListsLang(){
         listTrg.getItems().clear();
-        for(Language dataLang : listLang) {
-            if(!dataLang.getTrgLang().equals( listSrc.getSelectionModel().getSelectedItem() ) ){       
-                if(listTrg.getItems().size() > 0 ){       
-                    if(!listTrg.getItems().contains(dataLang.getTrgLang()) ){
-                       listTrg.getItems().add(dataLang.getTrgLang());
+        for( Language dataLang : listLang ) {
+            if( !dataLang.getTrgLang().equals( listSrc.getSelectionModel().getSelectedItem() ) ){       
+                if( listTrg.getItems().size() > 0 ){       
+                    if( !listTrg.getItems().contains( dataLang.getTrgLang() ) ){
+                       listTrg.getItems().add( dataLang.getTrgLang() );
                     }
                 }else{
-                    listTrg.getItems().add(dataLang.getTrgLang());
+                    listTrg.getItems().add( dataLang.getTrgLang() );
                 }
             }
         }
@@ -205,10 +209,10 @@ public class FXMLDocumentController implements Initializable {
      */
     private void setSrcListsLang(){
         listSrc.getItems().clear();
-        for(Language dataLang : listLang) {
+        for( Language dataLang : listLang ) {
                            
-            if(!listSrc.getItems().contains(dataLang.getSrcLang())){
-                listSrc.getItems().add(dataLang.getSrcLang());
+            if( !listSrc.getItems().contains( dataLang.getSrcLang() ) ){
+                listSrc.getItems().add( dataLang.getSrcLang() );
             }
         }
     }
@@ -216,27 +220,23 @@ public class FXMLDocumentController implements Initializable {
      * Write a text with total language
      */
     private void setTotalPairLanguages(){
-        if (listLang.size() > 0){
+        if ( listLang.size() > 0 ){
             totalPairLanguages.textProperty().set( Integer.toString( listLang.size() ) );
         }
         else
         {
-            totalPairLanguages.textProperty().set("0");
+            totalPairLanguages.textProperty().set( "0" );
         }
     }
     /**
      * Write a text with total sentences
      */
     private void setTotalSentences(){
-        if (listLang.size() > 0){
+        if ( listLang.size() > 0 ){
             int countTotalHashMap = 0;
-            for(Language lang : listLang){
-                countTotalHashMap += lang.getHashSentences().size();
-            }
+            countTotalHashMap = listLang.stream().map((lang) -> lang.getHashSentences().size()).reduce(countTotalHashMap, Integer::sum);
             totalSentences.textProperty().set( Integer.toString( countTotalHashMap ) );
-        }
-        else
-        {
+        } else {
             totalSentences.textProperty().set( "0" );
         }
     }
@@ -244,13 +244,55 @@ public class FXMLDocumentController implements Initializable {
     /**
      * Throw a thread pool to scann all tralation options
      */
-    private void setThreadPool(){
-        executor = (ThreadPoolExecutor)Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
-        future = executor.submit((Callable<HashMap<String, HashMap<String, String>>>) new ThreadPool(listLang));
-        int count = 1;
-        while(!future.isDone()){
-            System.out.println( "Waiting.. " + count + "sec" );
-            count++;
+    private void setThreadPool( Language language ){
+        try
+        {
+            executor = (ThreadPoolExecutor)Executors.newFixedThreadPool( Runtime.getRuntime().availableProcessors() );
+
+            callable = new ArrayList<>();
+            future = null;
+
+            Callable<String> callableLang = () -> 
+            {
+                try
+                {
+                    return language.getHashSentences().get( textSrc.getText().trim() );
+                }  catch ( Exception ex )  {
+                    throw new IllegalStateException( "Error Callable", ex );
+                }
+            };
+
+            callable.add( callableLang );
+
+            future = executor.invokeAll( callable );
+
+            executor.shutdown();
+
+            future.forEach(future -> 
+            {
+                try 
+                {
+                    if ( language.getTrgLang().equals( listTrg.getSelectionModel().getSelectedItem() ) ){
+                        sourceLanguage.textProperty().set( language.getSrcLang() );
+                        textTranslated.setText( future.get() );
+                    }
+                } catch(InterruptedException ex) {
+                    Logger
+                        .getLogger( FileUtils.class.getName() )
+                        .log( Level.SEVERE, null, ex );
+                    MessageUtils.showError( FileUtils.class.getName(), "InterruptedException:\n\n" + ex.getMessage() );
+                } catch( ExecutionException ex ) {
+                    Logger
+                        .getLogger( FileUtils.class.getName() )
+                        .log( Level.SEVERE, null, ex );
+                    MessageUtils.showError( FileUtils.class.getName(), "ExecutionException:\n\n" + ex.getMessage() );
+                }
+            });
+        } catch( InterruptedException ex ) {
+            Logger
+                .getLogger( FileUtils.class.getName() )
+                .log( Level.SEVERE, null, ex );
+            MessageUtils.showError( FileUtils.class.getName(), "InterruptedException:\n\n" + ex.getMessage() );
         }
     }
 }

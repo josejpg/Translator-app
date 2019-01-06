@@ -50,7 +50,7 @@ public class FileUtils {
                     
                 while (_textSrc != null && _textTrg != null)
                 {
-                    hashMap.put(_textSrc, _textTrg);
+                    hashMap.put(_textSrc.trim(), _textTrg.trim());
 
                     _textSrc = _bufferedReaderSrc.readLine();
                     _textTrg = _bufferedReaderTrg.readLine();
